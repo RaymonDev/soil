@@ -48,7 +48,7 @@
     ],
     "win": {
       "target": "nsis",
-      "icon": "assets/icon.png"
+      "icon": "assets/icon.ico"
     },
     "mac": {
       "target": "dmg",
@@ -61,7 +61,7 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "installerIcon": "assets/icon.png"
+      "installerIcon": "assets/icon.ico"
     }
   }
 }
