@@ -1,0 +1,5 @@
+# Placeholder — place app icons here
+# Required files for electron-builder:
+#   icon.ico   (Windows)
+#   icon.icns  (macOS)
+#   icon.png   (Linux, 512×512 recommended)

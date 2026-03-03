@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self' 'unsafe-inline' 'unsafe-eval' blob: data:;
+                 script-src  'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:;
+                 style-src   'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net;
+                 font-src    'self' data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://fonts.gstatic.com;
+                 connect-src 'self' https://www.overleaf.com https://git.overleaf.com;
+                 worker-src  'self' blob:;
+                 img-src     'self' data: blob:;" />
+  <title>Soil</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── Setup overlay ──────────────────────────────────────── -->
+  <div id="setup-overlay" class="hidden">
+    <div class="setup-card">
+      <div class="setup-icon"><img src="mole.png" alt="Soil" width="48" height="48" /></div>
+      <h1 class="setup-title">Soil</h1>
+      <p class="setup-sub">Setting up your environment — this only happens once.</p>
+      <div class="progress-track">
+        <div id="setup-progress-bar" class="progress-fill"></div>
+      </div>
+      <p id="setup-message" class="setup-status">Preparing…</p>
+      <button id="btn-retry-setup" class="btn primary hidden" style="margin-top:12px">Retry</button>
+    </div>
+  </div>
+
+  <!-- ── Welcome screen (split layout) ─────────────────────── -->
+  <div id="welcome-screen" class="screen active">
+
+    <!-- Left: hero branding -->
+    <div class="welcome-hero">
+      <div class="hero-orbs" aria-hidden="true">
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+      </div>
+      <div class="hero-content">
+        <div class="hero-title-row">
+          <h1 class="hero-title">Soil</h1>
+          <img src="mole_hole.png" alt="Soil" class="hero-logo" />
+        </div>
+        <span class="hero-badge">LaTeX Editor</span>
+        <p class="hero-desc">Write, compile, and sync your<br>LaTeX documents — entirely offline.</p>
+      </div>
+      <!-- Theme toggle (bottom-right) -->
+      <div class="theme-toggle" id="theme-toggle">
+        <button class="theme-btn" data-theme="light" title="Light">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        </button>
+        <button class="theme-btn" data-theme="dark" title="Dark">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        </button>
+        <button class="theme-btn" data-theme="system" title="System">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </button>
+      </div>
+      <!-- Settings toggle (bottom-left) -->
+      <div class="hero-settings" id="hero-settings">
+        <button id="btn-settings" class="theme-btn" title="Settings">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <!-- Right: action panel -->
+    <div class="welcome-panel">
+      <div class="panel-scroll">
+        <p class="panel-label">Get started</p>
+
+        <div class="welcome-actions">
+          <button id="btn-overleaf-login" class="btn primary action-card">Sign in to Overleaf</button>
+          <button id="btn-clone" class="btn action-card">Clone via Git URL</button>
+          <button id="btn-open"  class="btn action-card">Open Local Project</button>
+        </div>
+
+        <!-- Recent projects -->
+        <div id="recent-projects" class="hidden">
+          <p class="panel-label" style="margin-top:24px">Recent projects</p>
+          <div id="recent-list" class="recent-list"></div>
+        </div>
+
+        <!-- Login dialog -->
+        <div id="login-dialog" class="dialog-panel hidden">
+          <h3>Sign in to Overleaf</h3>
+          <p class="dialog-desc">
+            A secure Overleaf window will open.<br>
+            reCAPTCHA, SSO and 2FA all work. Your session persists across restarts.
+          </p>
+          <div class="dialog-btns">
+            <button id="btn-login-go" class="btn primary small">Open Overleaf Login</button>
+            <button id="btn-login-cancel" class="btn small">Cancel</button>
+          </div>
+          <p id="login-status" class="status-msg"></p>
+        </div>
+
+        <!-- Project browser -->
+        <div id="project-browser" class="dialog-panel hidden">
+          <div class="project-browser-header">
+            <h3>Your Projects</h3>
+            <div class="project-browser-actions">
+              <button id="btn-refresh-projects" class="btn tiny" title="Refresh">↻</button>
+              <button id="btn-logout" class="btn tiny" title="Sign out">Sign out</button>
+            </div>
+          </div>
+          <input id="project-search" type="text" placeholder="Search projects…" spellcheck="false" />
+          <div id="project-list" class="project-list">
+            <p class="project-list-empty">Loading…</p>
+          </div>
+          <p id="project-status" class="status-msg"></p>
+        </div>
+
+        <!-- Clone dialog -->
+        <div id="clone-dialog" class="dialog-panel hidden">
+          <h3>Clone Repository</h3>
+          <label for="git-url">Git URL</label>
+          <input id="git-url" type="text" placeholder="https://git.overleaf.com/…" spellcheck="false" />
+          <div class="dialog-btns">
+            <button id="btn-clone-go" class="btn primary small">Clone</button>
+            <button id="btn-clone-cancel" class="btn small">Cancel</button>
+          </div>
+          <p id="clone-status" class="status-msg"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Editor screen ─────────────────────────────────────── -->
+  <div id="editor-screen" class="screen">
+
+    <!-- Offline banner -->
+    <div id="offline-banner" class="offline-banner hidden">
+      <span class="offline-dot"></span>
+      <span>You are offline — edits are saved locally</span>
+      <span id="offline-unpushed" class="offline-tag"></span>
+    </div>
+
+    <!-- Back-online dialog -->
+    <div id="back-online-dialog" class="modal-overlay hidden">
+      <div class="modal-box">
+        <h3>Back online</h3>
+        <p>You have <strong id="back-online-count">0</strong> unsynced commit(s). Sync with Overleaf now?</p>
+        <div class="modal-btns">
+          <button id="btn-online-later" class="btn small">Later</button>
+          <button id="btn-online-sync" class="btn primary small">Sync now</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Toolbar -->
+    <header id="toolbar">
+      <div class="toolbar-left">
+        <button id="btn-back-projects" class="btn mini" title="Back to projects"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l4-4 4 4"/><path d="M7 5v9a4 4 0 0 0 4 4h6"/></svg> Projects</button>
+        <div class="toolbar-divider"></div>
+        <img src="mole.png" alt="Soil" class="toolbar-logo" />
+        <span class="toolbar-brand">Soil</span>
+        <div class="toolbar-divider"></div>
+        <select id="file-select" title="Current file"></select>
+      </div>
+      <div class="toolbar-center">
+        <div class="btn-group">
+          <button id="btn-compile" class="btn small primary" title="Compile (Ctrl+B)">▶ Compile</button>
+          <select id="auto-compile-select" title="Auto-compile">
+            <option value="off">Auto: Off</option>
+            <option value="normal" selected>Auto: Normal</option>
+            <option value="fast">Auto: Fast</option>
+          </select>
+        </div>
+        <div class="btn-group">
+          <button id="btn-push" class="btn small" title="Push (Ctrl+Shift+S)">↑ Push</button>
+          <button id="btn-pull" class="btn small" title="Pull">↓ Pull</button>
+        </div>
+      </div>
+      <div class="toolbar-right">
+        <span id="compile-indicator" class="indicator" title="Compile status"></span>
+        <span id="sync-indicator" class="indicator offline" title="Sync status">● Offline</span>
+        <div id="user-indicator" class="hidden">
+          <span id="user-email" class="indicator online" title="Overleaf account"></span>
+          <button id="btn-editor-logout" class="btn mini" title="Sign out">Sign out</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main split -->
+    <div id="split-container">
+      <!-- Sidebar -->
+      <aside id="sidebar">
+        <div class="sidebar-head">
+          <span class="sidebar-label">Explorer</span>
+          <div class="sidebar-actions">
+            <button id="btn-new-file" class="icon-btn" title="New file">+</button>
+            <button id="btn-upload-file" class="icon-btn" title="Upload file"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="12" y2="12"/><line x1="15" y1="15" x2="12" y2="12"/></svg></button>
+          </div>
+        </div>
+        <ul id="file-tree"></ul>
+      </aside>
+
+      <!-- Editor -->
+      <div id="editor-pane">
+        <div id="monaco-container"></div>
+      </div>
+
+      <!-- Resize gutter -->
+      <div id="gutter"></div>
+
+      <!-- PDF viewer -->
+      <div id="pdf-pane">
+        <div id="pdf-toolbar">
+          <button id="pdf-prev" class="pdf-ctrl">◀</button>
+          <span id="pdf-page-info" class="pdf-meta">—</span>
+          <button id="pdf-next" class="pdf-ctrl">▶</button>
+          <span class="pdf-dot">·</span>
+          <button id="pdf-zoom-out" class="pdf-ctrl">−</button>
+          <span id="pdf-zoom-level" class="pdf-meta">100%</span>
+          <button id="pdf-zoom-in" class="pdf-ctrl">+</button>
+          <span class="pdf-toolbar-spacer"></span>
+          <button id="btn-download-pdf" class="pdf-ctrl" title="Download PDF"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+        </div>
+        <div id="pdf-viewer">
+          <canvas id="pdf-canvas"></canvas>
+        </div>
+        <p id="pdf-placeholder" class="placeholder">Compile to preview</p>
+      </div>
+    </div>
+
+    <!-- Log panel -->
+    <footer id="log-panel">
+      <div id="log-header">
+        <span>Console</span>
+        <span id="log-toggle" class="log-chevron">▾</span>
+      </div>
+      <div id="log-content"></div>
+    </footer>
+  </div>
+
+  <!-- ── Push + Commit dialog ───────────────────────────────── -->
+  <div id="push-dialog" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h3>Push + Commit</h3>
+      <p>Sync these changes with Overleaf?</p>
+      <div id="push-changed-files" class="changed-files-list"></div>
+      <div class="modal-btns">
+        <button id="btn-push-cancel" class="btn small">Cancel</button>
+        <button id="btn-push-confirm" class="btn primary small">Push</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── New file dialog ────────────────────────────────────── -->
+  <div id="new-file-dialog" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h3>New File</h3>
+      <p>Enter a filename (e.g. <code>chapter2.tex</code>)</p>
+      <input id="new-file-name" class="modal-input" type="text" placeholder="filename.tex" spellcheck="false" />
+      <div class="modal-btns">
+        <button id="btn-newfile-cancel" class="btn small">Cancel</button>
+        <button id="btn-newfile-create" class="btn primary small">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Git token dialog ───────────────────────────────────── -->
+  <div id="git-token-dialog" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h3>Git Authentication Token</h3>
+      <p>Overleaf requires a Git token to clone projects.<br>Go to <strong>Overleaf &rarr; Account Settings &rarr; Git Integration</strong> and copy your token.</p>
+      <input id="git-token-input" class="modal-input" type="text" placeholder="Paste your token here…" spellcheck="false" autocomplete="off" />
+      <p id="git-token-status" class="status-msg"></p>
+      <div class="modal-btns">
+        <button id="btn-token-cancel" class="btn small">Cancel</button>
+        <button id="btn-token-settings" class="btn small">Open Overleaf Settings</button>
+        <button id="btn-token-save" class="btn primary small">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Settings dialog ────────────────────────────────────── -->
+  <div id="settings-dialog" class="modal-overlay hidden">
+    <div class="modal-box settings-box">
+      <h3>Settings</h3>
+
+      <!-- Git Token section -->
+      <div class="settings-section">
+        <label class="settings-label">Git Token</label>
+        <div id="settings-token-row" class="settings-token-row">
+          <span id="settings-token-display" class="token-display">No token saved</span>
+          <div class="settings-token-actions">
+            <button id="btn-settings-token-change" class="btn tiny">Change</button>
+            <button id="btn-settings-token-delete" class="btn tiny danger">Delete</button>
+          </div>
+        </div>
+        <div id="settings-token-edit" class="hidden">
+          <input id="settings-token-input" class="modal-input" type="text" placeholder="Paste new token…" spellcheck="false" autocomplete="off" />
+          <div class="modal-btns" style="margin-top:8px">
+            <button id="btn-settings-token-edit-cancel" class="btn tiny">Cancel</button>
+            <button id="btn-settings-token-edit-save" class="btn tiny primary">Save</button>
+          </div>
+        </div>
+        <p id="settings-token-status" class="status-msg"></p>
+      </div>
+
+      <!-- Danger Zone -->
+      <div class="settings-section settings-danger">
+        <label class="settings-label">Danger Zone</label>
+        <p class="settings-desc">Delete all stored data (Overleaf session, Git token, recent projects) and restore Soil to a fresh state.</p>
+        <button id="btn-reset-all" class="btn small danger">Reset All Data</button>
+      </div>
+
+      <div class="modal-btns" style="margin-top:16px">
+        <button id="btn-settings-close" class="btn small">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Reset confirmation dialog ──────────────────────────── -->
+  <div id="reset-confirm-dialog" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h3>⚠️ Are you sure?</h3>
+      <p>This will delete <strong>all</strong> stored data:</p>
+      <ul class="reset-list">
+        <li>Overleaf session &amp; cookies</li>
+        <li>Saved Git token</li>
+        <li>Recent projects list</li>
+      </ul>
+      <p>Local project files on disk will <strong>not</strong> be deleted.</p>
+      <div class="modal-btns">
+        <button id="btn-reset-cancel" class="btn small">Cancel</button>
+        <button id="btn-reset-confirm" class="btn small danger">I'm sure — delete everything</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CDN scripts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.52.2/min/vs/loader.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs" type="module"></script>
+  <script src="renderer.js" type="module"></script>
+</body>
+</html>
