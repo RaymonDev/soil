@@ -23,9 +23,10 @@ function tokenFilePath () {
 
 class OverleafAPI {
   constructor () {
-    this._email    = null;
-    this._loggedIn = false;
-    this._gitToken = null;
+    this._email       = null;
+    this._displayName = null;
+    this._loggedIn    = false;
+    this._gitToken    = null;
     this._loadPersistedToken();
   }
 
@@ -62,8 +63,9 @@ class OverleafAPI {
 
   // ── Public API ────────────────────────────────────────────
 
-  get isLoggedIn () { return this._loggedIn; }
-  get email ()      { return this._email; }
+  get isLoggedIn ()   { return this._loggedIn; }
+  get email ()        { return this._email; }
+  get displayName ()  { return this._displayName; }
 
   /** Return the persistent Electron session used for Overleaf */
   get session () {
@@ -113,7 +115,7 @@ class OverleafAPI {
               // Try to grab the email from cookies or page
               this._extractEmail(authWin).finally(() => {
                 authWin.close();
-                resolve({ ok: true, email: this._email });
+                resolve({ ok: true, email: this._email, displayName: this._displayName });
               });
             }
           }
@@ -174,12 +176,14 @@ class OverleafAPI {
       if (ok) {
         this._loggedIn = true;
         await this._readEmailFromCookies();
-        return { loggedIn: true, email: this._email };
+        await this._readDisplayNameFromSession();
+        return { loggedIn: true, email: this._email, displayName: this._displayName };
       }
     } catch { /* offline or error */ }
     this._loggedIn = false;
     this._email = null;
-    return { loggedIn: false, email: null };
+    this._displayName = null;
+    return { loggedIn: false, email: null, displayName: null };
   }
 
   // ────────────────────────────────────────────────────────────
@@ -216,6 +220,7 @@ class OverleafAPI {
     } catch { /* ignore */ }
     this._loggedIn = false;
     this._email = null;
+    this._displayName = null;
     this._gitToken = null;
     this._clearPersistedToken();
   }
@@ -362,24 +367,74 @@ class OverleafAPI {
     } catch { /* ignore */ }
   }
 
-  /** Try to extract email from the auth window's page before closing */
+  /** Try to read display name from Overleaf's /user/settings page via hidden window */
+  async _readDisplayNameFromSession () {
+    if (this._displayName) return; // already have it
+    try {
+      const win = new BrowserWindow({
+        width: 800, height: 600, show: false,
+        webPreferences: {
+          partition: SESSION_PARTITION,
+          nodeIntegration: false,
+          contextIsolation: true,
+        }
+      });
+      await win.loadURL(`${OVERLEAF_BASE}/project`);
+      const info = await win.webContents.executeJavaScript(`
+        (() => {
+          let displayName = null;
+          const userEl = document.querySelector('meta[name="ol-user"]');
+          if (userEl) {
+            try {
+              const u = JSON.parse(userEl.content);
+              const parts = [u.first_name, u.last_name].filter(Boolean);
+              if (parts.length > 0) displayName = parts.join(' ');
+            } catch {}
+          }
+          return displayName;
+        })()
+      `);
+      try { win.close(); } catch {}
+      if (info) this._displayName = info;
+    } catch { /* best effort */ }
+  }
+
+  /** Try to extract email and display name from the auth window's page before closing */
   async _extractEmail (win) {
     try {
       // Try cookie first
       await this._readEmailFromCookies();
-      if (this._email) return;
 
-      // Fallback: run JS in the page to grab it from Overleaf's meta tags
-      const email = await win.webContents.executeJavaScript(`
+      // Extract display name + email from Overleaf's meta tags
+      const info = await win.webContents.executeJavaScript(`
         (() => {
-          const el = document.querySelector('meta[name="ol-usersEmail"]');
-          if (el) return el.content;
-          const m = document.cookie.match(/ol\\.email=([^;]+)/);
-          if (m) return decodeURIComponent(m[1]);
-          return null;
+          let email = null, displayName = null;
+          // Email from meta
+          const emailEl = document.querySelector('meta[name="ol-usersEmail"]');
+          if (emailEl) email = emailEl.content;
+          if (!email) {
+            const m = document.cookie.match(/ol\\.email=([^;]+)/);
+            if (m) email = decodeURIComponent(m[1]);
+          }
+          // Display name from ol-user meta (JSON with first_name, last_name)
+          const userEl = document.querySelector('meta[name="ol-user"]');
+          if (userEl) {
+            try {
+              const u = JSON.parse(userEl.content);
+              const parts = [u.first_name, u.last_name].filter(Boolean);
+              if (parts.length > 0) displayName = parts.join(' ');
+            } catch {}
+          }
+          // Fallback: try ol-usersName meta
+          if (!displayName) {
+            const nameEl = document.querySelector('meta[name="ol-userName"]');
+            if (nameEl && nameEl.content) displayName = nameEl.content;
+          }
+          return { email, displayName };
         })()
       `);
-      if (email) this._email = email;
+      if (info.email && !this._email) this._email = info.email;
+      if (info.displayName) this._displayName = info.displayName;
     } catch { /* best effort */ }
   }
 

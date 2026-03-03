@@ -167,6 +167,38 @@ const $btnResetConfirm     = document.getElementById('btn-reset-confirm');
 const $recentProjects      = document.getElementById('recent-projects');
 const $recentList          = document.getElementById('recent-list');
 
+// AI / Ollama refs
+const $btnAI               = document.getElementById('btn-ai');
+const $aiPanel             = document.getElementById('ai-panel');
+const $aiPanelClose        = document.getElementById('ai-panel-close');
+const $aiModelSelect       = document.getElementById('ai-model-select');
+const $aiMessages          = document.getElementById('ai-messages');
+const $aiInput             = document.getElementById('ai-input');
+const $aiSend              = document.getElementById('ai-send');
+const $aiCancel            = document.getElementById('ai-cancel');
+const $ollamaPromptDialog  = document.getElementById('ollama-prompt-dialog');
+const $ollamaInstallDialog = document.getElementById('ollama-install-dialog');
+const $btnOllamaYesOnce    = document.getElementById('btn-ollama-yes-once');
+const $btnOllamaYesAlways  = document.getElementById('btn-ollama-yes-always');
+const $btnOllamaNo         = document.getElementById('btn-ollama-no');
+const $ollamaNeverAsk      = document.getElementById('ollama-never-ask');
+const $btnOllamaGet        = document.getElementById('btn-ollama-get');
+const $btnOllamaInstallClose = document.getElementById('btn-ollama-install-close');
+const $settingsAiModel     = document.getElementById('settings-ai-model');
+const $settingsAiStartup   = document.getElementById('settings-ai-startup');
+const $settingsOllamaStatus = document.getElementById('settings-ollama-status');
+
+// AI state
+let _ollamaRunning  = false;
+let _ollamaModels   = [];
+let _ollamaPrefs    = { autoStart: 'ask', preferredModel: '', neverAsk: false };
+let _aiStreaming     = false;      // true while streaming response
+let _aiConversation = [];          // { role, content } array for chat context
+
+// Compile errors panel
+const $compileErrors = document.getElementById('compile-errors');
+const $logTabs       = document.querySelectorAll('.log-tab');
+
 // Local project map cache (overleaf project id → local dir)
 let _localProjectMap = {};
 
@@ -478,10 +510,18 @@ async function doCompile () {
     $compileInd.textContent = '✗ Error';
     $compileInd.className = 'indicator error';
     appendLog('Compilation failed: ' + (result.error || ''), 'error');
+    // Pulse AI button to hint it can help
+    if (_ollamaRunning) {
+      $btnAI.classList.add('ai-pulse');
+      setTimeout(() => $btnAI.classList.remove('ai-pulse'), 8000);
+    }
   }
 
   // Apply error/warning decorations to the editor
   applyCompileDecorations(result.errors || [], result.warnings || []);
+
+  // Populate compile errors panel
+  populateCompileErrors(result.errors || [], result.warnings || [], result.ok);
 }
 
 function detectMainTex () {
@@ -544,6 +584,125 @@ function applyCompileDecorations (errors, warnings) {
   }
 
   errorDecorationIds = monacoEditor.deltaDecorations(errorDecorationIds, decorations);
+}
+
+// ── Compile errors panel ─────────────────────────────────────
+
+function populateCompileErrors (errors, warnings, ok) {
+  $compileErrors.innerHTML = '';
+
+  if (ok && errors.length === 0 && warnings.length === 0) {
+    const el = document.createElement('div');
+    el.className = 'compile-success';
+    el.textContent = '✓ Compilation succeeded — no errors or warnings.';
+    $compileErrors.appendChild(el);
+    // Update the tab badge
+    updateErrorTabBadge(0, 0);
+    return;
+  }
+
+  if (!ok && errors.length === 0 && warnings.length === 0) {
+    const el = document.createElement('div');
+    el.className = 'compile-empty';
+    el.textContent = 'Compilation failed but no structured errors were parsed from the log.';
+    $compileErrors.appendChild(el);
+    updateErrorTabBadge(0, 0);
+    return;
+  }
+
+  // Show errors first, then warnings
+  for (const err of errors) {
+    $compileErrors.appendChild(createIssueRow('error', err));
+  }
+  for (const warn of warnings) {
+    $compileErrors.appendChild(createIssueRow('warning', warn));
+  }
+
+  updateErrorTabBadge(errors.length, warnings.length);
+
+  // Auto-switch to errors tab if there are errors and panel is collapsed
+  if (errors.length > 0) {
+    switchLogTab('errors');
+    if ($logPanel.classList.contains('collapsed')) {
+      $logPanel.classList.remove('collapsed');
+      document.getElementById('log-toggle').textContent = '▾';
+    }
+  }
+}
+
+function createIssueRow (type, issue) {
+  const row = document.createElement('div');
+  row.className = 'compile-issue';
+
+  const icon = document.createElement('span');
+  icon.className = `issue-icon ${type}`;
+  icon.textContent = type === 'error' ? '✗' : '⚠';
+
+  const body = document.createElement('div');
+  body.className = 'issue-body';
+
+  const msg = document.createElement('div');
+  msg.className = 'issue-message';
+  msg.textContent = issue.message;
+
+  body.appendChild(msg);
+
+  if (issue.file || issue.line) {
+    const loc = document.createElement('div');
+    loc.className = 'issue-location';
+    let locText = '';
+    if (issue.file) locText += issue.file;
+    if (issue.line) locText += (locText ? ':' : 'line ') + issue.line;
+    loc.textContent = locText;
+    body.appendChild(loc);
+  }
+
+  row.appendChild(icon);
+  row.appendChild(body);
+
+  // Click to jump to line in editor
+  if (issue.line) {
+    row.addEventListener('click', () => {
+      if (monacoEditor) {
+        monacoEditor.revealLineInCenter(issue.line);
+        monacoEditor.setPosition({ lineNumber: issue.line, column: 1 });
+        monacoEditor.focus();
+      }
+    });
+  }
+
+  return row;
+}
+
+function updateErrorTabBadge (errorCount, warnCount) {
+  const tab = document.querySelector('.log-tab[data-tab="errors"]');
+  if (!tab) return;
+  if (errorCount > 0) {
+    tab.textContent = `Errors & Warnings (${errorCount}E ${warnCount}W)`;
+    tab.style.color = 'var(--error)';
+  } else if (warnCount > 0) {
+    tab.textContent = `Errors & Warnings (${warnCount}W)`;
+    tab.style.color = 'var(--warn)';
+  } else {
+    tab.textContent = 'Errors & Warnings';
+    tab.style.color = '';
+  }
+}
+
+// ── Log panel tabs ───────────────────────────────────────────
+
+function switchLogTab (tabName) {
+  for (const t of $logTabs) {
+    t.classList.toggle('active', t.dataset.tab === tabName);
+  }
+  $compileErrors.classList.toggle('active', tabName === 'errors');
+  $logContent.classList.toggle('active', tabName === 'console');
+  // Auto-scroll to bottom when switching tabs
+  if (tabName === 'console') {
+    requestAnimationFrame(() => { $logContent.scrollTop = $logContent.scrollHeight; });
+  } else {
+    requestAnimationFrame(() => { $compileErrors.scrollTop = $compileErrors.scrollHeight; });
+  }
 }
 
 // ── Git gutter decorations ───────────────────────────────────
@@ -853,9 +1012,24 @@ function initGutter () {
   const editorP  = document.getElementById('editor-pane');
   const pdfP     = document.getElementById('pdf-pane');
   let dragging   = false;
+  let startX     = 0;
+  let startEditorW = 0;
+
+  function getAvailableWidth () {
+    const container = document.getElementById('split-container');
+    const sidebar   = document.getElementById('sidebar');
+    const aiPanel   = document.getElementById('ai-panel');
+    let used = sidebar.getBoundingClientRect().width + gutter.offsetWidth;
+    if (aiPanel && !aiPanel.classList.contains('hidden')) {
+      used += aiPanel.getBoundingClientRect().width;
+    }
+    return container.getBoundingClientRect().width - used;
+  }
 
   gutter.addEventListener('mousedown', (e) => {
     dragging = true;
+    startX = e.clientX;
+    startEditorW = editorP.getBoundingClientRect().width;
     gutter.classList.add('dragging');
     document.body.style.cursor = 'col-resize';
     document.body.style.userSelect = 'none';
@@ -864,16 +1038,11 @@ function initGutter () {
 
   window.addEventListener('mousemove', (e) => {
     if (!dragging) return;
-    const container = document.getElementById('split-container');
-    const sidebar   = document.getElementById('sidebar');
-    const rect = container.getBoundingClientRect();
-    const sideW = sidebar.getBoundingClientRect().width;
-    const offset = e.clientX - rect.left - sideW;
-    const total  = rect.width - sideW - 6; // minus gutter
-    const pct = Math.max(20, Math.min(80, (offset / total) * 100));
-
-    editorP.style.flex = `0 0 ${pct}%`;
-    pdfP.style.flex    = `0 0 ${100 - pct}%`;
+    const available = getAvailableWidth();
+    const delta = e.clientX - startX;
+    const newEditorW = Math.max(200, Math.min(available - 200, startEditorW + delta));
+    editorP.style.flex = `0 0 ${newEditorW}px`;
+    pdfP.style.flex    = `0 0 ${available - newEditorW}px`;
   });
 
   window.addEventListener('mouseup', () => {
@@ -883,15 +1052,74 @@ function initGutter () {
     document.body.style.cursor = '';
     document.body.style.userSelect = '';
   });
+
+  // Double-click gutter → reset to 50/50
+  gutter.addEventListener('dblclick', () => {
+    editorP.style.flex = '1';
+    pdfP.style.flex    = '1';
+  });
 }
 
 // ── Log panel toggle ─────────────────────────────────────────
 
 function initLogToggle () {
-  $logHeader.addEventListener('click', () => {
+  // Chevron toggles collapse
+  document.getElementById('log-toggle').addEventListener('click', (e) => {
+    e.stopPropagation();
     $logPanel.classList.toggle('collapsed');
     document.getElementById('log-toggle').textContent =
       $logPanel.classList.contains('collapsed') ? '▸' : '▾';
+  });
+
+  // Tab switching
+  for (const tab of $logTabs) {
+    tab.addEventListener('click', (e) => {
+      e.stopPropagation();
+      switchLogTab(tab.dataset.tab);
+      // Expand panel if collapsed
+      if ($logPanel.classList.contains('collapsed')) {
+        $logPanel.classList.remove('collapsed');
+        document.getElementById('log-toggle').textContent = '▾';
+      }
+    });
+  }
+
+  // Drag-resize from top edge of log panel
+  let dragging = false;
+  let startY = 0;
+  let startH = 0;
+  const $resizeHandle = document.getElementById('log-resize-handle');
+
+  $resizeHandle.addEventListener('mousedown', (e) => {
+    e.preventDefault();
+    dragging = true;
+    startY = e.clientY;
+    startH = $logPanel.offsetHeight;
+    document.body.style.cursor = 'row-resize';
+    document.body.style.userSelect = 'none';
+  });
+
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const delta = startY - e.clientY;
+    const newH = Math.max(60, Math.min(startH + delta, window.innerHeight * 0.6));
+    $logPanel.style.height = newH + 'px';
+    $logPanel.classList.remove('collapsed');
+    document.getElementById('log-toggle').textContent = '▾';
+  });
+
+  window.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+
+  // Double-click resize handle → reset to default height
+  $resizeHandle.addEventListener('dblclick', () => {
+    $logPanel.style.height = '';
+    $logPanel.classList.remove('collapsed');
+    document.getElementById('log-toggle').textContent = '▾';
   });
 }
 
@@ -967,6 +1195,403 @@ async function openRecentProject (dir) {
   }
 }
 
+// ── Ollama / AI helpers ──────────────────────────────────────
+
+/** Check if Ollama is reachable and populate models */
+async function ollamaDetect () {
+  const check = await window.soil.ollamaCheck();
+  _ollamaRunning = check.running;
+  if (_ollamaRunning) {
+    await ollamaLoadModels();
+  }
+  return _ollamaRunning;
+}
+
+/** Refresh the model list from Ollama */
+async function ollamaLoadModels () {
+  const result = await window.soil.ollamaListModels();
+  if (result.ok) {
+    _ollamaModels = result.models;
+    populateModelSelects();
+  }
+}
+
+/** Populate both the panel and settings model dropdowns */
+function populateModelSelects () {
+  const selects = [$aiModelSelect, $settingsAiModel];
+  for (const sel of selects) {
+    const prev = sel.value;
+    sel.innerHTML = '';
+    if (_ollamaModels.length === 0) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = _ollamaRunning ? 'No models installed' : 'Not connected';
+      sel.appendChild(opt);
+    } else {
+      for (const m of _ollamaModels) {
+        const opt = document.createElement('option');
+        opt.value = m.name;
+        opt.textContent = m.name;
+        sel.appendChild(opt);
+      }
+      // Restore preferred model if available
+      if (_ollamaPrefs.preferredModel && _ollamaModels.some(m => m.name === _ollamaPrefs.preferredModel)) {
+        sel.value = _ollamaPrefs.preferredModel;
+      } else if (prev && _ollamaModels.some(m => m.name === prev)) {
+        sel.value = prev;
+      }
+    }
+  }
+  // Sync initial value
+  if ($aiModelSelect.value && $aiModelSelect.value !== $settingsAiModel.value) {
+    $settingsAiModel.value = $aiModelSelect.value;
+  }
+}
+
+/** Handle the AI button click — detect, prompt, or open panel */
+async function handleAIClick () {
+  if (_aiStreaming) return; // ignore while streaming
+
+  if (!_ollamaRunning) {
+    const running = await ollamaDetect();
+    if (running) {
+      openAIPanel();
+      return;
+    }
+
+    // Check prefs
+    _ollamaPrefs = await window.soil.ollamaGetPrefs();
+
+    if (_ollamaPrefs.neverAsk) {
+      // User said never ask — show install dialog (they might have uninstalled)
+      $ollamaInstallDialog.classList.remove('hidden');
+      return;
+    }
+
+    if (_ollamaPrefs.autoStart === 'always') {
+      // Try to start automatically (silently)
+      const startResult = await window.soil.ollamaStart();
+      if (startResult.ok) {
+        _ollamaRunning = true;
+        await ollamaLoadModels();
+        openAIPanel();
+        $btnAI.classList.add('ai-active');
+        appendLog('Ollama started automatically');
+        return;
+      }
+      // Start failed — Ollama may have been uninstalled
+      $ollamaInstallDialog.classList.remove('hidden');
+      return;
+    }
+
+    // autoStart is 'ask' — show the prompt, don't start yet
+    $ollamaPromptDialog.classList.remove('hidden');
+    return;
+  }
+
+  // Already running — toggle panel
+  toggleAIPanel();
+}
+
+function openAIPanel () {
+  $aiPanel.classList.remove('hidden');
+  $btnAI.classList.add('ai-active');
+  $aiInput.focus();
+}
+
+function closeAIPanel () {
+  $aiPanel.classList.add('hidden');
+  $btnAI.classList.remove('ai-active');
+}
+
+function toggleAIPanel () {
+  if ($aiPanel.classList.contains('hidden')) {
+    openAIPanel();
+  } else {
+    closeAIPanel();
+  }
+}
+
+/** Build the system prompt — unified assistant */
+function buildSystemPrompt () {
+  return 'You are an expert LaTeX assistant embedded in the Soil editor. Be concise and precise. When providing LaTeX code, wrap it in fenced code blocks using ```latex ... ```. Use plain text for explanations. You can help fix compilation errors, generate LaTeX code, explain concepts, and assist with formatting, equations, tables, bibliographies, and document structure. When the user shares code or errors from their document, focus on identifying the issue and providing corrected code.';
+}
+
+/** Get context (current file content + last compile errors) for "fix" mode */
+function getEditorContext () {
+  const context = {};
+  if (monacoEditor) {
+    context.source = monacoEditor.getValue();
+    context.fileName = currentFile || 'unknown.tex';
+  }
+  // Grab the last error from the compile indicator if available
+  const compileText = $compileInd.textContent;
+  if (compileText && compileText.includes('error')) {
+    context.compileStatus = compileText;
+  }
+  // Grab last error log lines
+  const logLines = $logContent.querySelectorAll('.log-line.error, .log-line.warn');
+  if (logLines.length > 0) {
+    const recentErrors = [];
+    const startIdx = Math.max(0, logLines.length - 10);
+    for (let i = startIdx; i < logLines.length; i++) {
+      recentErrors.push(logLines[i].textContent);
+    }
+    context.recentErrors = recentErrors.join('\n');
+  }
+  return context;
+}
+
+/** Render markdown-like text into an element (code blocks, inline code, bold, italic) */
+function renderAIMarkdown (el, text) {
+  // Split text into segments: fenced code blocks vs. everything else
+  const parts = text.split(/(```[\s\S]*?```|```[\s\S]*$)/g);
+  el.innerHTML = '';
+
+  for (const part of parts) {
+    if (!part) continue;
+
+    // Fenced code block (complete or in-progress)
+    const codeMatch = part.match(/^```(\w*)\n?([\s\S]*?)(?:```)?$/);
+    if (part.startsWith('```')) {
+      const pre = document.createElement('pre');
+      const code = document.createElement('code');
+      const lang = codeMatch ? codeMatch[1] : '';
+      let content = codeMatch ? codeMatch[2] : part.slice(3);
+      // Remove trailing ``` if present
+      if (content.endsWith('```')) content = content.slice(0, -3);
+      // Remove trailing newline
+      if (content.endsWith('\n')) content = content.slice(0, -1);
+      if (lang) pre.dataset.lang = lang;
+      code.textContent = content;
+      pre.appendChild(code);
+      el.appendChild(pre);
+      continue;
+    }
+
+    // Regular text — handle inline code, bold, italic
+    const span = document.createElement('span');
+    // Process inline formatting
+    let html = escapeHtml(part);
+    // Inline code: `...`
+    html = html.replace(/`([^`]+)`/g, '<code class="ai-inline-code">$1</code>');
+    // Bold: **...**
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    // Italic: *...*
+    html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    // Line breaks
+    html = html.replace(/\n/g, '<br>');
+    span.innerHTML = html;
+    el.appendChild(span);
+  }
+}
+
+/** Escape HTML special characters */
+function escapeHtml (str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+/** Send a message in the AI panel */
+async function sendAIMessage () {
+  const text = $aiInput.value.trim();
+  if (!text || _aiStreaming) return;
+  if (!_ollamaRunning) { handleAIClick(); return; }
+
+  const model = $aiModelSelect.value;
+  if (!model) {
+    addAIMessage('error', 'No model selected. Install a model in Ollama first (e.g. `ollama pull llama3`).');
+    return;
+  }
+
+  // Build user message — always include editor context if available
+  let userContent = text;
+  const ctx = getEditorContext();
+  if (ctx.recentErrors) {
+    userContent += `\n\nRECENT COMPILE LOG:\n${ctx.recentErrors}`;
+  }
+  if (ctx.source) {
+    const src = ctx.source.length > 8000 ? ctx.source.slice(0, 8000) + '\n... (truncated)' : ctx.source;
+    userContent += `\n\nCURRENT SOURCE (${ctx.fileName}):\n${src}`;
+  }
+
+  // Show user message in panel
+  addAIMessage('user', text);
+  $aiInput.value = '';
+
+  // Build messages array — always keep conversation history
+  const systemMsg = { role: 'system', content: buildSystemPrompt() };
+  _aiConversation.push({ role: 'user', content: userContent });
+  // Keep last 20 messages to avoid context overflow
+  if (_aiConversation.length > 20) {
+    _aiConversation = _aiConversation.slice(-20);
+  }
+
+  const messages = [systemMsg, ..._aiConversation];
+
+  // Show thinking indicator and switch to cancel button
+  const thinkingEl = addAIMessage('thinking', 'Thinking');
+  _aiStreaming = true;
+  $aiSend.classList.add('hidden');
+  $aiCancel.classList.remove('hidden');
+
+  // Stream the response
+  let fullResponse = '';
+  const responseEl = document.createElement('div');
+  responseEl.className = 'ai-msg assistant';
+
+  const tokenHandler = (token) => {
+    if (thinkingEl.parentNode) thinkingEl.remove();
+    fullResponse += token;
+    renderAIMarkdown(responseEl, fullResponse);
+    if (!responseEl.parentNode) {
+      $aiMessages.appendChild(responseEl);
+    }
+    $aiMessages.scrollTop = $aiMessages.scrollHeight;
+  };
+
+  const doneHandler = () => {
+    if (thinkingEl.parentNode) thinkingEl.remove();
+    // Final render with formatting
+    if (fullResponse) {
+      renderAIMarkdown(responseEl, fullResponse);
+    }
+    _aiStreaming = false;
+    $aiSend.classList.remove('hidden');
+    $aiCancel.classList.add('hidden');
+    if (fullResponse) {
+      _aiConversation.push({ role: 'assistant', content: fullResponse });
+    }
+    // Clean up listeners
+    window.soil.onOllamaToken(() => {});
+    window.soil.onOllamaDone(() => {});
+  };
+
+  window.soil.onOllamaToken(tokenHandler);
+  window.soil.onOllamaDone(doneHandler);
+
+  const result = await window.soil.ollamaChatStream({ model, messages });
+  if (!result.ok) {
+    if (thinkingEl.parentNode) thinkingEl.remove();
+    addAIMessage('error', `Error: ${result.error}`);
+    _aiStreaming = false;
+    $aiSend.classList.remove('hidden');
+    $aiCancel.classList.add('hidden');
+  }
+}
+
+/** Cancel the current AI generation */
+async function cancelAIGeneration () {
+  if (!_aiStreaming) return;
+  await window.soil.ollamaCancelStream();
+}
+
+/** Add a message bubble to the AI panel */
+function addAIMessage (type, text) {
+  // Remove welcome message if present
+  const welcome = $aiMessages.querySelector('.ai-welcome-msg');
+  if (welcome) welcome.remove();
+
+  const el = document.createElement('div');
+  el.className = `ai-msg ${type}`;
+  el.textContent = text;
+  $aiMessages.appendChild(el);
+  $aiMessages.scrollTop = $aiMessages.scrollHeight;
+  return el;
+}
+
+/** Wire all AI-related events */
+function wireAIEvents () {
+  // AI button
+  $btnAI.addEventListener('click', handleAIClick);
+
+  // Panel close
+  $aiPanelClose.addEventListener('click', closeAIPanel);
+
+  // Send button
+  $aiSend.addEventListener('click', sendAIMessage);
+
+  // Cancel button — stop generation
+  $aiCancel.addEventListener('click', cancelAIGeneration);
+
+  // Enter to send (Shift+Enter for newline), Escape to cancel
+  $aiInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendAIMessage();
+    }
+    if (e.key === 'Escape' && _aiStreaming) {
+      e.preventDefault();
+      cancelAIGeneration();
+    }
+  });
+
+  // Model select in panel — sync to prefs
+  $aiModelSelect.addEventListener('change', () => {
+    const model = $aiModelSelect.value;
+    $settingsAiModel.value = model;
+    window.soil.ollamaSetPrefs({ preferredModel: model });
+    _ollamaPrefs.preferredModel = model;
+  });
+
+  // Ollama prompt dialog buttons
+  $btnOllamaYesOnce.addEventListener('click', async () => {
+    $ollamaPromptDialog.classList.add('hidden');
+    if ($ollamaNeverAsk.checked) {
+      await window.soil.ollamaSetPrefs({ neverAsk: false, autoStart: 'ask' });
+    }
+    appendLog('Starting Ollama…');
+    const startResult = await window.soil.ollamaStart();
+    if (startResult.ok) {
+      _ollamaRunning = true;
+      await ollamaLoadModels();
+      openAIPanel();
+      $btnAI.classList.add('ai-active');
+      appendLog('Ollama connected');
+    } else {
+      $ollamaInstallDialog.classList.remove('hidden');
+    }
+  });
+
+  $btnOllamaYesAlways.addEventListener('click', async () => {
+    $ollamaPromptDialog.classList.add('hidden');
+    await window.soil.ollamaSetPrefs({ autoStart: 'always', neverAsk: false });
+    _ollamaPrefs.autoStart = 'always';
+    appendLog('Starting Ollama…');
+    const startResult = await window.soil.ollamaStart();
+    if (startResult.ok) {
+      _ollamaRunning = true;
+      await ollamaLoadModels();
+      openAIPanel();
+      $btnAI.classList.add('ai-active');
+      appendLog('Ollama connected — will auto-start on future launches');
+    } else {
+      $ollamaInstallDialog.classList.remove('hidden');
+    }
+  });
+
+  $btnOllamaNo.addEventListener('click', async () => {
+    $ollamaPromptDialog.classList.add('hidden');
+    if ($ollamaNeverAsk.checked) {
+      await window.soil.ollamaSetPrefs({ neverAsk: true });
+      _ollamaPrefs.neverAsk = true;
+    }
+  });
+
+  // Install dialog
+  $btnOllamaGet.addEventListener('click', () => {
+    // Open Ollama website in the system browser via a simple anchor trick
+    const a = document.createElement('a');
+    a.href = 'https://ollama.com/download';
+    a.target = '_blank';
+    a.rel = 'noopener';
+    a.click();
+    $ollamaInstallDialog.classList.add('hidden');
+  });
+  $btnOllamaInstallClose.addEventListener('click', () => {
+    $ollamaInstallDialog.classList.add('hidden');
+  });
+}
+
 // ── Settings dialog helpers ──────────────────────────────────
 
 async function openSettingsDialog () {
@@ -983,6 +1608,20 @@ async function openSettingsDialog () {
   $settingsTokenRow.classList.remove('hidden');
   $settingsTokenInput.value = '';
   $settingsTokenStatus.textContent = '';
+
+  // Load Ollama prefs & status into settings
+  _ollamaPrefs = await window.soil.ollamaGetPrefs();
+  $settingsAiStartup.value = _ollamaPrefs.autoStart || 'ask';
+  if (_ollamaRunning) {
+    $settingsOllamaStatus.textContent = '● Connected';
+    $settingsOllamaStatus.style.color = 'var(--success)';
+    await ollamaLoadModels();
+  } else {
+    $settingsOllamaStatus.textContent = '○ Not running';
+    $settingsOllamaStatus.style.color = 'var(--t3)';
+    populateModelSelects();
+  }
+
   $settingsDialog.classList.remove('hidden');
 }
 
@@ -1177,6 +1816,12 @@ function wireEvents () {
     $gitTokenDialog.classList.add('hidden');
     $gitTokenInput.value = '';
     $gitTokenStatus.textContent = '';
+    // If logged in, still show project browser (they can add token later)
+    if (_loggedIn) {
+      hideAllDialogs();
+      $projectBrowser.classList.remove('hidden');
+      loadOverleafProjects();
+    }
   });
 
   $btnTokenSettings.addEventListener('click', () => {
@@ -1196,10 +1841,18 @@ function wireEvents () {
     const result = await window.soil.setGitToken(token);
     $btnTokenSave.disabled = false;
     if (result.ok) {
-      $gitTokenStatus.textContent = 'Token saved! You can now clone projects.';
+      $gitTokenStatus.textContent = 'Token saved! Opening projects…';
       $gitTokenStatus.className = 'status-msg success';
       $gitTokenInput.value = '';
-      setTimeout(() => $gitTokenDialog.classList.add('hidden'), 1200);
+      setTimeout(() => {
+        $gitTokenDialog.classList.add('hidden');
+        // If logged in, open project browser automatically
+        if (_loggedIn) {
+          hideAllDialogs();
+          $projectBrowser.classList.remove('hidden');
+          loadOverleafProjects();
+        }
+      }, 800);
     } else {
       $gitTokenStatus.textContent = result.error || 'Failed to save token';
       $gitTokenStatus.className = 'status-msg error';
@@ -1347,6 +2000,23 @@ function wireEvents () {
       $loginDialog.classList.remove('hidden');
     }
   });
+
+  // ── Settings AI listeners ──
+  $settingsAiModel.addEventListener('change', () => {
+    const model = $settingsAiModel.value;
+    $aiModelSelect.value = model;
+    window.soil.ollamaSetPrefs({ preferredModel: model });
+    _ollamaPrefs.preferredModel = model;
+  });
+  $settingsAiStartup.addEventListener('change', () => {
+    const val = $settingsAiStartup.value;
+    window.soil.ollamaSetPrefs({ autoStart: val, neverAsk: val === 'never' });
+    _ollamaPrefs.autoStart = val;
+    _ollamaPrefs.neverAsk = val === 'never';
+  });
+
+  // ── AI events ──
+  wireAIEvents();
 }
 
 // ── Overleaf login flow ──────────────────────────────────────
@@ -1363,15 +2033,28 @@ async function doOverleafLogin () {
     $loginStatus.textContent = '';
     $loginDialog.classList.add('hidden');
     _loggedIn = true;
+    const label = result.displayName || result.email || 'Overleaf';
     $btnOverleafLogin.textContent = '✓ Signed in';
     $userIndicator.classList.remove('hidden');
-    $userEmail.textContent = result.email || 'Overleaf';
-    appendLog('Signed in to Overleaf');
+    $userEmail.textContent = label;
+    appendLog(`Signed in to Overleaf as ${label}`);
 
-    // Automatically open the project browser
-    hideAllDialogs();
-    $projectBrowser.classList.remove('hidden');
-    loadOverleafProjects();
+    // Check if user already has a Git token before opening projects
+    const tokenInfo = await window.soil.getGitToken();
+    if (!tokenInfo.hasToken) {
+      // Prompt for Git token right after login
+      hideAllDialogs();
+      $gitTokenDialog.classList.remove('hidden');
+      $gitTokenInput.value = '';
+      $gitTokenStatus.textContent = 'To sync with Overleaf, Soil needs your Git authentication token.';
+      $gitTokenStatus.className = 'status-msg';
+      $gitTokenInput.focus();
+    } else {
+      // Already have a token — go straight to project browser
+      hideAllDialogs();
+      $projectBrowser.classList.remove('hidden');
+      loadOverleafProjects();
+    }
   } else {
     $loginStatus.textContent = result.error || 'Login failed';
     $loginStatus.className = 'status-msg error';
@@ -1561,12 +2244,12 @@ function wireSetup () {
   try {
     const session = await window.soil.overleafCheckSession();
     if (session.loggedIn) {
-      const email = session.email || 'Overleaf user';
+      const label = session.displayName || session.email || 'Overleaf user';
       _loggedIn = true;
-      $btnOverleafLogin.textContent = `✓ ${email}`;
+      $btnOverleafLogin.textContent = `✓ ${label}`;
       $userIndicator.classList.remove('hidden');
-      $userEmail.textContent = email;
-      appendLog(`Session restored — signed in as ${email}`);
+      $userEmail.textContent = label;
+      appendLog(`Session restored — signed in as ${label}`);
       // Auto-open project browser
       hideAllDialogs();
       $projectBrowser.classList.remove('hidden');
@@ -1576,4 +2259,23 @@ function wireSetup () {
 
   // Poll sync status periodically
   setInterval(pollSyncStatus, 5000);
+
+  // ── Ollama auto-detection ──
+  try {
+    _ollamaPrefs = await window.soil.ollamaGetPrefs();
+    const running = await ollamaDetect();
+    if (running) {
+      $btnAI.classList.add('ai-active');
+      appendLog(`Ollama detected — ${_ollamaModels.length} model(s) available`);
+    } else if (_ollamaPrefs.autoStart === 'always' && !_ollamaPrefs.neverAsk) {
+      // Try to auto-start
+      const startResult = await window.soil.ollamaStart();
+      if (startResult.ok) {
+        _ollamaRunning = true;
+        await ollamaLoadModels();
+        $btnAI.classList.add('ai-active');
+        appendLog('Ollama auto-started');
+      }
+    }
+  } catch { /* Ollama not available — that's fine */ }
 })();

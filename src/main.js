@@ -15,11 +15,26 @@ let compiler     = null;
 let projectDir   = null;   // absolute path to the current project
 let overleaf     = null;   // initialised after app ready (needs Electron session)
 let toolManager  = null;   // manages bundled TinyTeX + MinGit
+let ollamaProc   = null;   // child process if we spawned Ollama ourselves
 
 // Path for recent-projects JSON
 function recentsPath () { return path.join(app.getPath('userData'), 'recent-projects.json'); }
 // Path for local-project-map JSON (overleaf project id → local dir)
 function localMapPath () { return path.join(app.getPath('userData'), 'local-project-map.json'); }
+// Path for Ollama preferences JSON
+function ollamaPrefsPath () { return path.join(app.getPath('userData'), 'ollama-prefs.json'); }
+
+/** Read Ollama preferences from disk */
+function readOllamaPrefs () {
+  try {
+    if (fs.existsSync(ollamaPrefsPath())) return JSON.parse(fs.readFileSync(ollamaPrefsPath(), 'utf-8'));
+  } catch { /* ignore */ }
+  return { autoStart: 'ask', preferredModel: '', neverAsk: false };
+}
+/** Write Ollama preferences to disk */
+function writeOllamaPrefs (prefs) {
+  try { fs.writeFileSync(ollamaPrefsPath(), JSON.stringify(prefs, null, 2), 'utf-8'); } catch { /* ignore */ }
+}
 
 /** Read recent projects list from disk */
 function readRecents () {
@@ -78,6 +93,7 @@ function createWindow () {
   });
 
   mainWindow.loadFile(path.join(__dirname, 'ui', 'index.html'));
+  mainWindow.maximize();
 
   // Open DevTools in dev mode
   if (process.argv.includes('--dev')) {
@@ -522,7 +538,7 @@ app.whenReady().then(async () => {
 
   // ── IPC: Overleaf login status ──
   ipcMain.handle('overleaf-status', () => {
-    return { loggedIn: overleaf.isLoggedIn, email: overleaf.email };
+    return { loggedIn: overleaf.isLoggedIn, email: overleaf.email, displayName: overleaf.displayName };
   });
 
   // ── IPC: Clone from project browser (auto-picks folder) ──
@@ -642,6 +658,8 @@ app.whenReady().then(async () => {
       try { fs.unlinkSync(recentsPath()); } catch { /* ignore */ }
       // Clear local project map
       try { fs.unlinkSync(localMapPath()); } catch { /* ignore */ }
+      // Clear Ollama prefs
+      try { fs.unlinkSync(ollamaPrefsPath()); } catch { /* ignore */ }
       // Clear Git token (already cleared by overleaf.logout, but be safe)
       overleaf._clearPersistedToken();
       log('All stored data has been cleared');
@@ -653,6 +671,172 @@ app.whenReady().then(async () => {
     } catch (err) {
       return { ok: false, error: err.message };
     }
+  });
+
+  // ── IPC: Ollama ─────────────────────────────────────────────
+
+  /** Check if Ollama is reachable */
+  ipcMain.handle('ollama-check', async () => {
+    try {
+      const resp = await fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(3000) });
+      if (resp.ok) return { running: true };
+      return { running: false };
+    } catch {
+      return { running: false };
+    }
+  });
+
+  /** List available models */
+  ipcMain.handle('ollama-list-models', async () => {
+    try {
+      const resp = await fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(5000) });
+      if (!resp.ok) return { ok: false, error: 'Ollama not reachable' };
+      const data = await resp.json();
+      const models = (data.models || []).map(m => ({ name: m.name, size: m.size }));
+      return { ok: true, models };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  /** Send a chat request to Ollama (non-streaming, returns full response) */
+  ipcMain.handle('ollama-chat', async (_e, { model, messages }) => {
+    try {
+      const resp = await fetch('http://127.0.0.1:11434/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, messages, stream: false })
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        return { ok: false, error: text || `HTTP ${resp.status}` };
+      }
+      const data = await resp.json();
+      return { ok: true, content: data.message?.content || '' };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  /** Stream chat tokens to the renderer via events (supports cancellation) */
+  let _streamAbort = null;
+  ipcMain.handle('ollama-chat-stream', async (_e, { model, messages }) => {
+    try {
+      _streamAbort = new AbortController();
+      const resp = await fetch('http://127.0.0.1:11434/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, messages, stream: true }),
+        signal: _streamAbort.signal
+      });
+      if (!resp.ok) {
+        const text = await resp.text();
+        _streamAbort = null;
+        return { ok: false, error: text || `HTTP ${resp.status}` };
+      }
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop(); // keep incomplete line in buffer
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const json = JSON.parse(line);
+              if (json.message?.content) {
+                mainWindow.webContents.send('ollama-token', json.message.content);
+              }
+              if (json.done) {
+                mainWindow.webContents.send('ollama-done');
+              }
+            } catch { /* ignore parse error in stream */ }
+          }
+        }
+        // Process remaining buffer
+        if (buffer.trim()) {
+          try {
+            const json = JSON.parse(buffer);
+            if (json.message?.content) {
+              mainWindow.webContents.send('ollama-token', json.message.content);
+            }
+          } catch { /* ignore */ }
+        }
+      } catch (readErr) {
+        if (readErr.name === 'AbortError') {
+          mainWindow.webContents.send('ollama-done');
+          _streamAbort = null;
+          return { ok: true, cancelled: true };
+        }
+        throw readErr;
+      }
+      mainWindow.webContents.send('ollama-done');
+      _streamAbort = null;
+      return { ok: true };
+    } catch (err) {
+      _streamAbort = null;
+      if (err.name === 'AbortError') {
+        mainWindow.webContents.send('ollama-done');
+        return { ok: true, cancelled: true };
+      }
+      return { ok: false, error: err.message };
+    }
+  });
+
+  /** Cancel an in-progress stream */
+  ipcMain.handle('ollama-cancel-stream', () => {
+    if (_streamAbort) {
+      _streamAbort.abort();
+      _streamAbort = null;
+      return { ok: true };
+    }
+    return { ok: false, error: 'No active stream' };
+  });
+
+  /** Try to start Ollama (ollama serve) */
+  ipcMain.handle('ollama-start', async () => {
+    if (ollamaProc) return { ok: true, message: 'Already started by Soil' };
+    try {
+      const { spawn } = require('child_process');
+      ollamaProc = spawn('ollama', ['serve'], {
+        detached: true,
+        stdio: ['ignore', 'ignore', 'ignore'],
+        shell: false,
+        windowsHide: true
+      });
+      ollamaProc.unref();
+      ollamaProc.on('error', () => { ollamaProc = null; });
+      ollamaProc.on('exit', () => { ollamaProc = null; });
+      // Give it a moment to start
+      await new Promise(r => setTimeout(r, 2000));
+      // Verify it's running
+      try {
+        const resp = await fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(3000) });
+        if (resp.ok) return { ok: true };
+      } catch { /* ignore */ }
+      return { ok: false, error: 'Ollama process started but not responding' };
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
+
+  /** Get Ollama preferences */
+  ipcMain.handle('ollama-get-prefs', () => {
+    return readOllamaPrefs();
+  });
+
+  /** Save Ollama preferences */
+  ipcMain.handle('ollama-set-prefs', (_e, prefs) => {
+    const current = readOllamaPrefs();
+    const merged = { ...current, ...prefs };
+    writeOllamaPrefs(merged);
+    return { ok: true };
   });
 });
 

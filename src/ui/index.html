@@ -7,7 +7,7 @@
                  script-src  'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net blob:;
                  style-src   'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://cdn.jsdelivr.net;
                  font-src    'self' data: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://fonts.gstatic.com;
-                 connect-src 'self' https://www.overleaf.com https://git.overleaf.com;
+                 connect-src 'self' https://www.overleaf.com https://git.overleaf.com http://127.0.0.1:11434;
                  worker-src  'self' blob:;
                  img-src     'self' data: blob:;" />
   <title>Soil</title>
@@ -179,6 +179,8 @@
         </div>
       </div>
       <div class="toolbar-right">
+        <button id="btn-ai" class="btn mini ai-btn" title="AI Assistant (Ollama)"><svg class="ai-sparkle" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.09 6.26L20 10l-5.91 1.74L12 18l-2.09-6.26L4 10l5.91-1.74L12 2z"/></svg> AI</button>
+        <div class="toolbar-divider"></div>
         <span id="compile-indicator" class="indicator" title="Compile status"></span>
         <span id="sync-indicator" class="indicator offline" title="Sync status">● Offline</span>
         <div id="user-indicator" class="hidden">
@@ -228,15 +230,44 @@
         </div>
         <p id="pdf-placeholder" class="placeholder">Compile to preview</p>
       </div>
+
+      <!-- AI panel (collapsible) -->
+      <div id="ai-panel" class="ai-panel hidden">
+        <div class="ai-panel-header">
+          <span class="ai-panel-title"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l2.09 6.26L20 10l-5.91 1.74L12 18l-2.09-6.26L4 10l5.91-1.74L12 2z"/></svg> AI Assistant</span>
+          <div class="ai-panel-controls">
+            <select id="ai-model-select" class="ai-model-select" title="Select model">
+              <option value="">No models</option>
+            </select>
+            <button id="ai-panel-close" class="icon-btn" title="Close AI panel">&times;</button>
+          </div>
+        </div>
+        <div id="ai-messages" class="ai-messages">
+          <div class="ai-welcome-msg">
+            <p>Ask me anything about your LaTeX document — fix errors, generate code, or get help.</p>
+            <p class="ai-privacy-note">Everything runs locally via Ollama — nothing leaves your machine.</p>
+          </div>
+        </div>
+        <div class="ai-input-row">
+          <textarea id="ai-input" class="ai-input" placeholder="Ask anything about your LaTeX document…" rows="2"></textarea>
+          <button id="ai-send" class="btn small primary ai-send" title="Send">▶</button>
+          <button id="ai-cancel" class="btn small danger ai-cancel hidden" title="Stop generation (Esc)">■</button>
+        </div>
+      </div>
     </div>
 
     <!-- Log panel -->
     <footer id="log-panel">
+      <div id="log-resize-handle" class="log-resize-handle"></div>
       <div id="log-header">
-        <span>Console</span>
+        <div class="log-tabs">
+          <button class="log-tab active" data-tab="errors">Errors &amp; Warnings</button>
+          <button class="log-tab" data-tab="console">Console</button>
+        </div>
         <span id="log-toggle" class="log-chevron">▾</span>
       </div>
-      <div id="log-content"></div>
+      <div id="compile-errors" class="log-tab-content active"></div>
+      <div id="log-content" class="log-tab-content"></div>
     </footer>
   </div>
 
@@ -306,6 +337,26 @@
         <p id="settings-token-status" class="status-msg"></p>
       </div>
 
+      <!-- AI / Ollama section -->
+      <div class="settings-section">
+        <label class="settings-label">AI Assistant (Ollama)</label>
+        <div class="settings-ai-row">
+          <span class="settings-desc">Model:</span>
+          <select id="settings-ai-model" class="ai-model-select" title="Preferred model">
+            <option value="">Not connected</option>
+          </select>
+          <span id="settings-ollama-status" class="settings-desc"></span>
+        </div>
+        <div class="settings-ai-row" style="margin-top:8px">
+          <span class="settings-desc">On startup:</span>
+          <select id="settings-ai-startup" class="ai-model-select" title="Ollama startup behaviour">
+            <option value="ask">Ask me</option>
+            <option value="always">Start automatically</option>
+            <option value="never">Never ask</option>
+          </select>
+        </div>
+      </div>
+
       <!-- Danger Zone -->
       <div class="settings-section settings-danger">
         <label class="settings-label">Danger Zone</label>
@@ -333,6 +384,34 @@
       <div class="modal-btns">
         <button id="btn-reset-cancel" class="btn small">Cancel</button>
         <button id="btn-reset-confirm" class="btn small danger">I'm sure — delete everything</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Ollama start prompt ────────────────────────────────── -->
+  <div id="ollama-prompt-dialog" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h3>Start Ollama?</h3>
+      <p>Ollama is installed but not running.<br>Would you like to start it for the AI assistant?</p>
+      <div class="modal-btns ollama-prompt-btns">
+        <button id="btn-ollama-yes-once" class="btn small primary">Yes, this time</button>
+        <button id="btn-ollama-yes-always" class="btn small">Yes, every time</button>
+        <button id="btn-ollama-no" class="btn small">No</button>
+      </div>
+      <label class="ollama-never-label">
+        <input type="checkbox" id="ollama-never-ask" /> Never ask again
+      </label>
+    </div>
+  </div>
+
+  <!-- ── Ollama not installed prompt ────────────────────────── -->
+  <div id="ollama-install-dialog" class="modal-overlay hidden">
+    <div class="modal-box">
+      <h3>Ollama not found</h3>
+      <p>The AI assistant needs <strong>Ollama</strong> running locally.<br>It's free, open-source, and everything stays on your machine.</p>
+      <div class="modal-btns">
+        <button id="btn-ollama-get" class="btn small primary">Get Ollama</button>
+        <button id="btn-ollama-install-close" class="btn small">Close</button>
       </div>
     </div>
   </div>

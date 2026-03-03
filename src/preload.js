@@ -51,6 +51,18 @@ contextBridge.exposeInMainWorld('soil', {
   getLocalProjectMap   : ()          => ipcRenderer.invoke('get-local-project-map'),
   resetAllData         : ()          => ipcRenderer.invoke('reset-all-data'),
 
+  // ── Ollama AI ──
+  ollamaCheck      : ()             => ipcRenderer.invoke('ollama-check'),
+  ollamaListModels : ()             => ipcRenderer.invoke('ollama-list-models'),
+  ollamaChat       : (opts)         => ipcRenderer.invoke('ollama-chat', opts),
+  ollamaChatStream : (opts)         => ipcRenderer.invoke('ollama-chat-stream', opts),
+  ollamaCancelStream : ()           => ipcRenderer.invoke('ollama-cancel-stream'),
+  ollamaStart      : ()             => ipcRenderer.invoke('ollama-start'),
+  ollamaGetPrefs   : ()             => ipcRenderer.invoke('ollama-get-prefs'),
+  ollamaSetPrefs   : (prefs)        => ipcRenderer.invoke('ollama-set-prefs', prefs),
+  onOllamaToken    : (cb)           => ipcRenderer.on('ollama-token', (_e, t) => cb(t)),
+  onOllamaDone     : (cb)           => ipcRenderer.on('ollama-done', () => cb()),
+
   // ── Events from main → renderer ──
   onProjectOpened : (cb) => ipcRenderer.on('project:opened', (_e, d) => cb(d)),
   onSyncEvent     : (cb) => ipcRenderer.on('sync-event',     (_e, d) => cb(d)),
