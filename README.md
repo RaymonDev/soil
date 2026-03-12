@@ -226,15 +226,15 @@ Distributed under the **MIT License**. See `LICENSE` for more information.
 
 
 <!-- MARKDOWN LINKS & IMAGES -->
-[contributors-shield]: https://img.shields.io/github/contributors/RaymonDev/soil.svg?style=for-the-badge
+[contributors-shield]: https://img.shields.io/github/contributors/RaymonDev/soil.svg?style=for-the-badge&v=1
 [contributors-url]: https://github.com/RaymonDev/soil/graphs/contributors
-[forks-shield]: https://img.shields.io/github/forks/RaymonDev/soil.svg?style=for-the-badge
+[forks-shield]: https://img.shields.io/github/forks/RaymonDev/soil.svg?style=for-the-badge&v=1
 [forks-url]: https://github.com/RaymonDev/soil/network/members
-[stars-shield]: https://img.shields.io/github/stars/RaymonDev/soil.svg?style=for-the-badge
+[stars-shield]: https://img.shields.io/github/stars/RaymonDev/soil.svg?style=for-the-badge&v=1
 [stars-url]: https://github.com/RaymonDev/soil/stargazers
-[issues-shield]: https://img.shields.io/github/issues/RaymonDev/soil.svg?style=for-the-badge
+[issues-shield]: https://img.shields.io/github/issues/RaymonDev/soil.svg?style=for-the-badge&v=1
 [issues-url]: https://github.com/RaymonDev/soil/issues
-[license-shield]: https://img.shields.io/github/license/RaymonDev/soil.svg?style=for-the-badge
+[license-shield]: https://img.shields.io/github/license/RaymonDev/soil.svg?style=for-the-badge&v=1
 [license-url]: https://github.com/RaymonDev/soil/blob/main/LICENSE
 [Electron-badge]: https://img.shields.io/badge/Electron-47848F?style=for-the-badge&logo=electron&logoColor=white
 [Electron-url]: https://www.electronjs.org/
