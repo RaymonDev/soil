@@ -57,6 +57,7 @@
       </ul>
     </li>
     <li><a href="#keyboard-shortcuts">Keyboard Shortcuts</a></li>
+    <li><a href="#roadmap">Roadmap</a></li>
     <li><a href="#contributing">Contributing</a></li>
     <li><a href="#license">License</a></li>
   </ol>
@@ -202,6 +203,32 @@ Output goes to `release/`.
 | `Ctrl + S` | Save current file to disk |
 | `Ctrl + B` | Compile LaTeX |
 | `Ctrl + Shift + S` | Push + Commit to Overleaf |
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
+
+<!-- ROADMAP -->
+## Roadmap
+
+Tracks active work and near-term priorities.
+
+- [x] One-click Overleaf auth (SSO + 2FA compatible)
+- [x] Local TinyTeX + MinGit bootstrap
+- [x] Monaco diagnostics + PDF live preview
+- [ ] Two-way Sync UX improvements (conflict hints + guided resolution)
+- [ ] Integrated commit history panel inside the app
+- [ ] Rich diff view before push (side-by-side)
+- [ ] Project-level settings sync (theme, auto-compile mode)
+- [ ] Crash reporting and anonymous diagnostics opt-in
+
+### Next Milestones
+
+- **v1.1**: Better sync conflict visibility and safer push flows.
+- **v1.2**: In-app history, cleaner project browser filters, and quality-of-life editor upgrades.
+- **v1.3**: Stability pass, startup performance improvements, and expanded offline workflow polish.
+
+Have an idea? Open a feature request below so it can be reviewed and added to the roadmap.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

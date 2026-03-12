@@ -1,0 +1,66 @@
+name: Feature Request
+description: Suggest an idea to improve Soil
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the idea. Well-scoped requests are easier to prioritize and ship.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to Solve
+      description: What pain point are you facing?
+      placeholder: Example: I cannot compare local and remote file versions before pushing.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed Solution
+      description: Describe the feature you want.
+      placeholder: Example: Add a side-by-side diff panel in the push dialog.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: Any workarounds or alternative approaches?
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Editor
+        - Compiler
+        - Overleaf Sync
+        - PDF Preview
+        - Project Management
+        - Settings
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Expected Impact
+      description: Who benefits and how?
+      placeholder: Example: Fewer merge mistakes when collaborating offline.
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist
+      options:
+        - label: I searched existing issues before opening this.
+          required: true
+        - label: This request is focused on a single feature.
+          required: true

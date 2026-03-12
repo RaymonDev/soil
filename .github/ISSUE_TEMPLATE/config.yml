@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and Discussion
+    url: https://github.com/RaymonDev/soil/discussions
+    about: Ask usage questions, share ideas, or start broader discussions.
