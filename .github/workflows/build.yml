@@ -1,0 +1,41 @@
+name: Compilar Soil
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  compilar-app:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Descargar el código del repositorio
+        uses: actions/checkout@v4
+
+      - name: Instalar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar las dependencias de Soil
+        run: npm install
+
+      - name: Compilar los instaladores
+
+        run: npx electron-builder
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Guardar los archivos generados
+        uses: actions/upload-artifact@v4
+        with:
+          name: Instaladores-Soil-${{ matrix.os }}
+          path: |
+            release/*.exe
+            release/*.AppImage
+            release/*.dmg
