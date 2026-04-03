@@ -23,7 +23,7 @@
     "simple-git": "^3.32.3"
   },
   "devDependencies": {
-    "electron": "^40.6.1",
+    "electron": "^40.8.3",
     "electron-builder": "^26.8.1"
   },
   "build": {
