@@ -20,7 +20,7 @@
   "description": "Open-source desktop LaTeX editor and offline two-way synchronization client for Overleaf Premium projects.",
   "dependencies": {
     "chokidar": "^5.0.0",
-    "simple-git": "^3.32.3"
+    "simple-git": "^3.36.0"
   },
   "devDependencies": {
     "electron": "^40.6.1",
